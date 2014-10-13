@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <title>{{tank}}</title>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+  </head>
+  <body oncontextmenu = "return false">
+  
+</video>
+  </body>
+  <script type="text/javascript" src="./javascripts/tank.js"></script>
+</html>
