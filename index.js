@@ -67,14 +67,10 @@ io.on('connection', function(socket){
   });
 
   socket.on('fire', function(tank){
-    /*for(var j = 0; j < count; j++)
+    for(var j = 0; j < count; j++)
     {
-      if(pool[j].tank.id != tank.id)
-      {
-        pool[j].emit('fire', tank);
-      }
-    }*/
-    socket.emit('fire', tank);
+      pool[j].emit('fire', tank);
+    }
   });
 
 

@@ -89,8 +89,9 @@ function engine() {
 
   for(var i = 0; i < shellCount; i++)
   {
-    shellArray[i].shellobj.x += shellArray[i].incX;
-    shellArray[i].shellobj.y += shellArray[i].incY;
+    shellArray[i].update();
+    //shellArray[i].shellobj.x += shellArray[i].incX;
+    //shellArray[i].shellobj.y += shellArray[i].incY;
 
     /*for(var j = 0; j < tankCount; j++)
     {
@@ -106,14 +107,14 @@ function engine() {
       }
     }*/
 
-    if(shellArray[i].shellobj.y < 100 || shellArray[i].shellobj.y > H - 100 || shellArray[i].shellobj.x < 0 || shellArray[i].shellobj.x > W)
+    /*if(shellArray[i].shellobj.y < 100 || shellArray[i].shellobj.y > H - 100 || shellArray[i].shellobj.x < 0 || shellArray[i].shellobj.x > W)
     {
       //destroyShell(shellArray[i])
       stage.removeChild(shellArray[i].shellobj);
       shellArray.splice(shellArray.indexOf(shellArray[i], 1));
       shellCount = shellArray.length;
       console.log("removing too much")
-    }
+    }*/
   }
 }
 
@@ -296,8 +297,38 @@ function shellBuilder(data) {
   this.incY = data.incY;
   this.shellobj.x = data.x + (data.incX * 7);
   this.shellobj.y = data.y + (data.incY * 7);
+  this.destroyShell = function() {
+      stage.removeChild(this.shellobj);
+      shellArray.splice(shellArray.indexOf(this), 1);
+      shellCount = shellArray.length;
+    }
   return this;
 }
+
+shellBuilder.prototype.update = function() {
+  this.shellobj.x += this.incX;
+  this.shellobj.y += this.incY;
+
+  if(this.shellobj.y < 100 || this.shellobj.y > H - 100 || this.shellobj.x < 100 || this.shellobj.x > W - 100)
+    {
+      this.destroyShell();
+    }
+
+/*for(var i = 0; i < tankCount; i++)
+{
+  distance = Math.sqrt(Math.pow(this.shellobj.x - tankArray[i].tankObj.x, 2) + Math.pow(this.shellobj.y - tankArray[i].tankObj.y, 2));
+
+      if(distance < 20)
+      {
+        this.destroyShell();
+      }
+}*/
+     
+    
+
+}
+
+
 
 function createCanvas() {
 
