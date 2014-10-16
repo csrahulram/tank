@@ -17,6 +17,7 @@ turnSpeed = 0.6,
 speed = 1.2,
 tankId = new Array(),
 tankArray = new Array(),
+tankCount,
 player,
 radian,
 playerBase,
@@ -25,7 +26,16 @@ oldPlayerX,
 oldPlayerY,
 oldPlayerRotation,
 oldHudRotation,
-playerId
+playerId,
+distance,
+shellCount,
+shellArray = new Array(),
+shellSpeed = 5,
+shellX,
+shellY,
+tankX,
+tankY
+
 
 window.requestAnimFrame = (function(){
   return  window.requestAnimationFrame       ||
@@ -76,9 +86,42 @@ function engine() {
   targetX += (stage.mouseX - targetX) / 10;
   targetY += (stage.mouseY - targetY) / 10;
   playerHud.rotation = Math.atan2((player.y - targetY),(player.x - targetX)) / (Math.PI / 180);
+
+  for(var i = 0; i < shellCount; i++)
+  {
+    shellArray[i].shellobj.x += shellArray[i].incX;
+    shellArray[i].shellobj.y += shellArray[i].incY;
+
+    /*for(var j = 0; j < tankCount; j++)
+    {
+      shellX = shellArray[i].shellobj.x;
+      shellY = shellArray[i].shellobj.y;
+      tankX = tankArray[j].tankobj.x;
+      tankY = tankArray[j].tankobj.y;
+      distance = Math.sqrt(Math.pow(shellX - tankX, 2) + Math.pow(shellY - tankY, 2));
+
+      if(distance < 20)
+      {
+        console.log("hitted");
+      }
+    }*/
+
+    if(shellArray[i].shellobj.y < 100 || shellArray[i].shellobj.y > H - 100 || shellArray[i].shellobj.x < 0 || shellArray[i].shellobj.x > W)
+    {
+      //destroyShell(shellArray[i])
+      stage.removeChild(shellArray[i].shellobj);
+      shellArray.splice(shellArray.indexOf(shellArray[i], 1));
+      shellCount = shellArray.length;
+      console.log("removing too much")
+    }
+  }
 }
 
-
+function destroyShell(shell) {
+  stage.removeChild(shell.shellobj);
+  shellArray.splice(shellArray.indexOf(shell, 1));
+  shellCount = shellArray.length;
+}
 
 
 function goFullScreen() {
@@ -123,49 +166,61 @@ function onKeyboardUp(event) {
 }
 
 function onMouseDown(event) {
-  socket.emit('fire', {id:playerId, incX:2, incY:2});
+  var 
+  X = player.x - (player.x + (Math.cos(playerHud.rotation * (Math.PI / 180)) * shellSpeed)),
+  Y = player.y - (player.y + (Math.sin(playerHud.rotation * (Math.PI / 180)) * shellSpeed));
+
+  socket.emit('fire', {id:playerId, x:player.x, y:player.y, incX:X, incY:Y});
   console.log("you are firing");
 }
 
-function tank(data) {
-  var tankobj = new createjs.Container();
-  tankobj.name = data.id;
+function tankBuilder(data) {
+  this.tankobj = new createjs.Container();
+  this.tankobj.name = data.id;
+  var hitArea = new createjs.Shape();
+  hitArea.graphics.beginFill('#000000').drawCircle(0,0,30);
+  hitArea.alpha = 0.2;
+
   var base = new createjs.Shape();
   base.name = "base";
-   base.graphics.beginFill(data.color).drawRect(-20, -30, 40, 60);
-   tankobj.x = data.initX;
-   tankobj.y = data.initY;
+  base.graphics.beginFill(data.color).drawRect(-20, -30, 40, 60);
+  this.tankobj.x = data.initX;
+  this.tankobj.y = data.initY;
 
-   var hud = new createjs.Shape();
-   hud.name = "hud";
+  var hud = new createjs.Shape();
+  hud.name = "hud";
   hud.graphics.beginFill("#624900").drawRect(-16, -12, 32, 24);
   hud.graphics.beginFill("#624900").drawRect(-46, -3, 30, 6);
   hud.x = base.x;
   hud.y = base.y;
 
-  tankobj.addChild(base);
-  tankobj.addChild(hud);
-
-  stage.addChild(tankobj);
-
-  tankId.push(data.id);
-  tankArray.push(tankobj);
+  this.tankobj.addChild(hitArea);
+  this.tankobj.addChild(base);
+  this.tankobj.addChild(hud);
+  
+  return this;
 }
 
-tank.prototype.fire = function(data) {
+/*tankBuilder.prototype.fire = function() {
+    console.log('Firing the tank');
+  }*/
 
-}
+
+
+
+  
 
 function destroy(data) {
   var ind = tankId.indexOf(data.id)
-  stage.removeChild(tankArray[ind]);
+  stage.removeChild(tankArray[ind].tankobj);
   tankArray.splice(ind, 1);
   tankId.splice(ind, 1);
+  tankCount = tankArray.length;
 }
 
 function control(data) {
   playerId = data;
-  player = tankArray[tankId.indexOf(data)];
+  player = tankArray[tankId.indexOf(data)].tankobj;
   playerBase = player.getChildByName('base');
   playerHud = player.getChildByName('hud');
   startEngine();
@@ -199,27 +254,49 @@ function upCtrl()
   radian = playerBase.rotation * Math.PI / 180;
   player.x = player.x - Math.sin(-radian) * speed;
   player.y = player.y - Math.cos(-radian) * speed;
-  
 }
 function downCtrl()
 {
   radian = playerBase.rotation * Math.PI / 180;
   player.x = player.x + Math.sin(-radian) * speed;
   player.y = player.y + Math.cos(-radian) * speed;
-  
 }
 
 function move(tank) {
-  var enemy = tankArray[tankId.indexOf(tank.id)];
+  var enemy = tankArray[tankId.indexOf(tank.id)].tankobj;
   enemy.x = tank.x;
   enemy.y = tank.y;
   enemy.getChildByName('base').rotation = tank.rotBase;
   enemy.getChildByName('hud').rotation = tank.rotHud;
 }
 
-function fire(tank) {
-  //tankArray[tankId.indexOf(tank.id)].fire;
-  console.log("enemy firing");
+function createTank(data) {
+  var tank = new tankBuilder(data);
+  tankId.push(data.id);
+  tankArray.push(tank);
+  stage.addChild(tank.tankobj);
+  tankCount = tankArray.length;
+}
+
+function fire(data) {
+  console.log('comming here')
+  //tankArray[tankId.indexOf(data.id)].fire();
+  var shell = new shellBuilder(data);
+  shellArray.push(shell);
+  shellCount = shellArray.length;
+  stage.addChild(shell.shellobj);
+}
+
+function shellBuilder(data) {
+  //console.log('comming here')
+  this.shellobj = new createjs.Shape();
+  this.shellobj.graphics.beginFill('#000000').drawCircle(0,0,3);
+  this.shellobj.name = data.id;
+  this.incX = data.incX;
+  this.incY = data.incY;
+  this.shellobj.x = data.x + (data.incX * 7);
+  this.shellobj.y = data.y + (data.incY * 7);
+  return this;
 }
 
 function createCanvas() {
@@ -240,7 +317,7 @@ function createCanvas() {
 
   createjs.Ticker.setFPS(15);
 
-  socket.on('create', tank);
+  socket.on('create', createTank);
   socket.on('destroy', destroy);
   socket.on('control', control);
   socket.on('move', move);
