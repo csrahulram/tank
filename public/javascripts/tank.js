@@ -1,11 +1,10 @@
 var
 canvas = document.createElement("canvas"),
+socket = io(),
 stage,
-tank_base,
-radian_base,
-tank_hud,
-target_x = 0,
-target_y = 0,
+
+targetX = 0,
+targetY = 0,
 ctx = canvas.getContext("2d"),
 debug = true,
 left = false,
@@ -14,16 +13,26 @@ up = false,
 down = false,
 W = window.innerWidth,
 H = window.innerHeight,
-turnSpeed = 0.8,
-speed = 2
-
+turnSpeed = 0.6,
+speed = 1.2,
+tankId = new Array(),
+tankArray = new Array(),
+player,
+radian,
+playerBase,
+playerHud,
+oldPlayerX,
+oldPlayerY,
+oldPlayerRotation,
+oldHudRotation,
+playerId
 
 window.requestAnimFrame = (function(){
   return  window.requestAnimationFrame       ||
           window.webkitRequestAnimationFrame ||
           window.mozRequestAnimationFrame    ||
           function( callback ){
-            window.setTimeout(callback, 1);
+            window.setTimeout(callback);
           };
 })();
 
@@ -34,50 +43,42 @@ window.cancelRequestAnimFrame = ( function() {
     window.oCancelRequestAnimationFrame       ||
     window.msCancelRequestAnimationFrame      ||
     clearTimeout
-})();
+})();	
 
 
-
-
-function startAnimation(){
-  requestAnimFrame(startAnimation);
+function startEngine(){
+  requestAnimFrame(startEngine);
   engine();
 }
 
-function stopAnimation(){
-  cancelRequestAnimFrame(stopAnimation);
+function stopEngine(){
+  cancelRequestAnimFrame();
 }
 
 function engine() {
-  if(left)
+   if(left)
   {
-    left_ctrl();
+    leftCtrl();
   }
   if(right)
   {
-    right_ctrl();
+    rightCtrl();
   }
   if(up)
   {
-    up_ctrl();
+    upCtrl();
   }
   if(down)
   {
-    down_ctrl();
+    downCtrl();
   }
 
-  tank_hud.x = tank_base.x;
-  tank_hud.y = tank_base.y;
-
-  hud_ctrl();
+  targetX += (stage.mouseX - targetX) / 10;
+  targetY += (stage.mouseY - targetY) / 10;
+  playerHud.rotation = Math.atan2((player.y - targetY),(player.x - targetX)) / (Math.PI / 180);
 }
 
-function hud_ctrl()
-{
-  target_x += (stage.mouseX - target_x) / 10;
-  target_y += (stage.mouseY - target_y) / 10;
-  tank_hud.rotation = Math.atan2((target_y - tank_hud.y),(target_x - tank_hud.x)) / (Math.PI / 180) + 90;
-}
+
 
 
 function goFullScreen() {
@@ -91,7 +92,7 @@ function goFullScreen() {
   ctx.fillRect(0,0, canvas.width, canvas.height);
 }
 
-function onKeyboardDown(e) {
+function onKeyboardDown(event) {
   if(event.keyCode == 37) {
         left = true;
     }
@@ -106,7 +107,7 @@ function onKeyboardDown(e) {
     }
 }
 
-function onKeyboardUp(e) {
+function onKeyboardUp(event) {
   if(event.keyCode == 37) {
         left = false;
     }
@@ -121,71 +122,104 @@ function onKeyboardUp(e) {
     }
 }
 
-startBtn = {
-  w: 100,
-  h: 50,
-  x: W/2 - 50,
-  y: H/2 - 25,
-  
-  draw: function() {
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = "2";
-    ctx.strokeRect(this.x, this.y, this.w, this.h);
-    
-    ctx.font = "18px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStlye = "white";
-    ctx.fillText("Start", W/2, H/2 );
-  }
-};
-
-restartBtn = {
-  w: 100,
-  h: 50,
-  x: W/2 - 50,
-  y: H/2 - 50,
-  
-  draw: function() {
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = "2";
-    ctx.strokeRect(this.x, this.y, this.w, this.h);
-    
-    ctx.font = "18px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStlye = "white";
-    ctx.fillText("Restart", W/2, H/2 - 25 );
-  }
-};
-
-function render(event) {
-  stage.update();
+function onMouseDown(event) {
+  socket.emit('fire', {id:playerId, incX:2, incY:2});
+  console.log("you are firing");
 }
 
-function left_ctrl()
-{
-  tank_base.rotation = tank_base.rotation - turnSpeed;
-   
-}
-function right_ctrl()
-{
-  tank_base.rotation = tank_base.rotation + turnSpeed; 
+function tank(data) {
+  var tankobj = new createjs.Container();
+  tankobj.name = data.id;
+  var base = new createjs.Shape();
+  base.name = "base";
+   base.graphics.beginFill(data.color).drawRect(-20, -30, 40, 60);
+   tankobj.x = data.initX;
+   tankobj.y = data.initY;
+
+   var hud = new createjs.Shape();
+   hud.name = "hud";
+  hud.graphics.beginFill("#624900").drawRect(-16, -12, 32, 24);
+  hud.graphics.beginFill("#624900").drawRect(-46, -3, 30, 6);
+  hud.x = base.x;
+  hud.y = base.y;
+
+  tankobj.addChild(base);
+  tankobj.addChild(hud);
+
+  stage.addChild(tankobj);
+
+  tankId.push(data.id);
+  tankArray.push(tankobj);
 }
 
-function up_ctrl()
+tank.prototype.fire = function(data) {
+
+}
+
+function destroy(data) {
+  var ind = tankId.indexOf(data.id)
+  stage.removeChild(tankArray[ind]);
+  tankArray.splice(ind, 1);
+  tankId.splice(ind, 1);
+}
+
+function control(data) {
+  playerId = data;
+  player = tankArray[tankId.indexOf(data)];
+  playerBase = player.getChildByName('base');
+  playerHud = player.getChildByName('hud');
+  startEngine();
+
+  createjs.Ticker.addEventListener("tick", render);
+}
+
+function render(e) {
+   stage.update();
+    if(oldPlayerX != player.x || oldPlayerY != player.y || oldPlayerRotation != playerBase.rotation || oldHudRotation != playerHud.rotation)
+    {
+      socket.emit('move', {id:playerId, x:player.x, y:player.y, rotBase:playerBase.rotation, rotHud:playerHud.rotation});
+    }
+  oldPlayerX = player.x;
+  oldPlayerY = player.y;
+  oldPlayerRotation = playerBase.rotation;
+  oldHudRotation = playerHud.rotation;
+}
+
+function leftCtrl()
 {
-  radian_base = tank_base.rotation * Math.PI / 180;
-  tank_base.x = tank_base.x - Math.sin(-radian_base) * speed;
-  tank_base.y = tank_base.y - Math.cos(-radian_base) * speed;
+  playerBase.rotation = playerBase.rotation - turnSpeed;
+}
+function rightCtrl()
+{
+  playerBase.rotation = playerBase.rotation + turnSpeed; 
+}
+
+function upCtrl()
+{
+  radian = playerBase.rotation * Math.PI / 180;
+  player.x = player.x - Math.sin(-radian) * speed;
+  player.y = player.y - Math.cos(-radian) * speed;
   
 }
-function down_ctrl()
+function downCtrl()
 {
-  radian_base = tank_base.rotation * Math.PI / 180;
-  tank_base.x = tank_base.x + Math.sin(-radian_base) * speed;
-  tank_base.y = tank_base.y + Math.cos(-radian_base) * speed;
+  radian = playerBase.rotation * Math.PI / 180;
+  player.x = player.x + Math.sin(-radian) * speed;
+  player.y = player.y + Math.cos(-radian) * speed;
   
+}
+
+function move(tank) {
+  var enemy = tankArray[tankId.indexOf(tank.id)];
+  enemy.x = tank.x;
+  enemy.y = tank.y;
+  enemy.getChildByName('base').rotation = tank.rotBase;
+  enemy.getChildByName('hud').rotation = tank.rotHud;
+}
+
+function fire(tank) {
+  //tankArray[tankId.indexOf(tank.id)].fire;
+  console.log("enemy firing");
 }
 
 function createCanvas() {
@@ -197,29 +231,20 @@ function createCanvas() {
 
   stage = new createjs.Stage("stage");
   var bg = new createjs.Shape();
-  bg.graphics.beginFill("#297F87").drawRect(0,0,W,H);
+  bg.graphics.beginFill('#297F87').drawRect(0,0,W,H);
   stage.addChild(bg);
   //document.addEventListener("mouseup", goFullScreen);
   document.addEventListener('keydown', onKeyboardDown);
   document.addEventListener('keyup', onKeyboardUp);
+  document.addEventListener('mousedown', onMouseDown);
 
-  tank_base = new createjs.Shape();
-  tank_base.graphics.beginFill("#CC9900").drawRect(-20,-30,40,60);
-  tank_base.x = W / 2;
-  tank_base.y = H / 2;
-  stage.addChild(tank_base);
-
-  tank_hud = new createjs.Shape();
-  tank_hud.graphics.beginFill("#624900").drawRect(-12,-16,24,32);
-  tank_hud.graphics.beginFill("#624900").drawRect(-3,-46,6,30);
-  tank_hud.x = tank_base.x;
-  tank_hud.y = tank_base.y;
-  stage.addChild(tank_hud);
-
-  
   createjs.Ticker.setFPS(15);
-  createjs.Ticker.addEventListener("tick", render);
-  startAnimation();
+
+  socket.on('create', tank);
+  socket.on('destroy', destroy);
+  socket.on('control', control);
+  socket.on('move', move);
+  socket.on('fire', fire);
 }
 
 createCanvas();
