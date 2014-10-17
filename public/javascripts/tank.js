@@ -34,7 +34,10 @@ shellSpeed = 5,
 shellX,
 shellY,
 tankX,
-tankY
+tankY,
+currentTank = 0,
+alive = false,
+createjs;
 
 
 window.requestAnimFrame = (function(){
@@ -42,7 +45,7 @@ window.requestAnimFrame = (function(){
           window.webkitRequestAnimationFrame ||
           window.mozRequestAnimationFrame    ||
           function( callback ){
-            window.setTimeout(callback);
+            window.setTimeout(callback, 1000);
           };
 })();
 
@@ -62,7 +65,7 @@ function startEngine(){
 }
 
 function stopEngine(){
-  cancelRequestAnimFrame();
+  cancelRequestAnimFrame(stopEngine);
 }
 
 function engine() {
@@ -90,31 +93,6 @@ function engine() {
   for(var i = 0; i < shellCount; i++)
   {
     shellArray[i].update();
-    //shellArray[i].shellobj.x += shellArray[i].incX;
-    //shellArray[i].shellobj.y += shellArray[i].incY;
-
-    /*for(var j = 0; j < tankCount; j++)
-    {
-      shellX = shellArray[i].shellobj.x;
-      shellY = shellArray[i].shellobj.y;
-      tankX = tankArray[j].tankobj.x;
-      tankY = tankArray[j].tankobj.y;
-      distance = Math.sqrt(Math.pow(shellX - tankX, 2) + Math.pow(shellY - tankY, 2));
-
-      if(distance < 20)
-      {
-        console.log("hitted");
-      }
-    }*/
-
-    /*if(shellArray[i].shellobj.y < 100 || shellArray[i].shellobj.y > H - 100 || shellArray[i].shellobj.x < 0 || shellArray[i].shellobj.x > W)
-    {
-      //destroyShell(shellArray[i])
-      stage.removeChild(shellArray[i].shellobj);
-      shellArray.splice(shellArray.indexOf(shellArray[i], 1));
-      shellCount = shellArray.length;
-      console.log("removing too much")
-    }*/
   }
 }
 
@@ -167,20 +145,23 @@ function onKeyboardUp(event) {
 }
 
 function onMouseDown(event) {
-  var 
-  X = player.x - (player.x + (Math.cos(playerHud.rotation * (Math.PI / 180)) * shellSpeed)),
-  Y = player.y - (player.y + (Math.sin(playerHud.rotation * (Math.PI / 180)) * shellSpeed));
 
-  socket.emit('fire', {id:playerId, x:player.x, y:player.y, incX:X, incY:Y});
-  console.log("you are firing");
+  if(alive)
+  {
+    var 
+    X = player.x - (player.x + (Math.cos(playerHud.rotation * (Math.PI / 180)) * shellSpeed)),
+    Y = player.y - (player.y + (Math.sin(playerHud.rotation * (Math.PI / 180)) * shellSpeed));
+
+    socket.emit('fire', {id:playerId, x:player.x, y:player.y, incX:X, incY:Y});
+  }
 }
 
 function tankBuilder(data) {
   this.tankobj = new createjs.Container();
   this.tankobj.name = data.id;
-  var hitArea = new createjs.Shape();
-  hitArea.graphics.beginFill('#000000').drawCircle(0,0,30);
-  hitArea.alpha = 0.2;
+  //var hitArea = new createjs.Shape();
+  //hitArea.graphics.beginFill('#000000').drawCircle(0,0,30);
+  //hitArea.alpha = 0.2;
 
   var base = new createjs.Shape();
   base.name = "base";
@@ -195,7 +176,7 @@ function tankBuilder(data) {
   hud.x = base.x;
   hud.y = base.y;
 
-  this.tankobj.addChild(hitArea);
+  //this.tankobj.addChild(hitArea);
   this.tankobj.addChild(base);
   this.tankobj.addChild(hud);
   
@@ -207,16 +188,36 @@ function tankBuilder(data) {
   }*/
 
 
+function hit(data) {
 
+}
 
   
 
-function destroy(data) {
+function destroyTank(data) {
+
+  
   var ind = tankId.indexOf(data.id)
   stage.removeChild(tankArray[ind].tankobj);
   tankArray.splice(ind, 1);
   tankId.splice(ind, 1);
   tankCount = tankArray.length;
+  if(data.id == playerId)
+    {
+      destroyPlayer()
+    }
+}
+
+
+function destroyPlayer() {
+  stopEngine();
+  alive = false;
+  var text = new createjs.Text("You have lost :(. \nRefresh browser to play again.", "40px Arial", "#ff7700"); 
+    text.y = 200;
+    text.x = 100; 
+    text.textBaseline = "alphabetic";
+    stage.addChild(text);
+  //socket.removeListener('fire', fire);
 }
 
 function control(data) {
@@ -227,18 +228,23 @@ function control(data) {
   startEngine();
 
   createjs.Ticker.addEventListener("tick", render);
+  alive = true;
 }
 
 function render(e) {
    stage.update();
+   if(alive)
+   {
     if(oldPlayerX != player.x || oldPlayerY != player.y || oldPlayerRotation != playerBase.rotation || oldHudRotation != playerHud.rotation)
     {
       socket.emit('move', {id:playerId, x:player.x, y:player.y, rotBase:playerBase.rotation, rotHud:playerHud.rotation});
     }
-  oldPlayerX = player.x;
-  oldPlayerY = player.y;
-  oldPlayerRotation = playerBase.rotation;
-  oldHudRotation = playerHud.rotation;
+    oldPlayerX = player.x;
+    oldPlayerY = player.y;
+    oldPlayerRotation = playerBase.rotation;
+    oldHudRotation = playerHud.rotation;
+   }
+    
 }
 
 function leftCtrl()
@@ -280,23 +286,21 @@ function createTank(data) {
 }
 
 function fire(data) {
-  console.log('comming here')
   //tankArray[tankId.indexOf(data.id)].fire();
   var shell = new shellBuilder(data);
   shellArray.push(shell);
   shellCount = shellArray.length;
-  stage.addChild(shell.shellobj);
+  stage.addChild(shell.shellobj);  
 }
 
 function shellBuilder(data) {
-  //console.log('comming here')
   this.shellobj = new createjs.Shape();
   this.shellobj.graphics.beginFill('#000000').drawCircle(0,0,3);
   this.shellobj.name = data.id;
   this.incX = data.incX;
   this.incY = data.incY;
-  this.shellobj.x = data.x + (data.incX * 7);
-  this.shellobj.y = data.y + (data.incY * 7);
+  this.shellobj.x = data.x + (data.incX * 8);
+  this.shellobj.y = data.y + (data.incY * 8);
   this.destroyShell = function() {
       stage.removeChild(this.shellobj);
       shellArray.splice(shellArray.indexOf(this), 1);
@@ -309,23 +313,24 @@ shellBuilder.prototype.update = function() {
   this.shellobj.x += this.incX;
   this.shellobj.y += this.incY;
 
-  if(this.shellobj.y < 100 || this.shellobj.y > H - 100 || this.shellobj.x < 100 || this.shellobj.x > W - 100)
-    {
-      this.destroyShell();
-    }
+  if(this.shellobj.y < 0 || this.shellobj.y > H || this.shellobj.x < 0 || this.shellobj.x > W)
+  {
+    this.destroyShell();
+  }
+  distance = Math.sqrt(Math.pow(this.shellobj.x - tankArray[currentTank].tankobj.x, 2) + Math.pow(this.shellobj.y - tankArray[currentTank].tankobj.y, 2));
 
-/*for(var i = 0; i < tankCount; i++)
-{
-  distance = Math.sqrt(Math.pow(this.shellobj.x - tankArray[i].tankObj.x, 2) + Math.pow(this.shellobj.y - tankArray[i].tankObj.y, 2));
+  if(distance < 40)
+  {
+    this.destroyShell();
+    destroyTank({id:tankArray[currentTank].tankobj.name})
+    //socket.emit('hit', tankArray[currentTank].tankobj.name);
+  }
 
-      if(distance < 20)
-      {
-        this.destroyShell();
-      }
-}*/
-     
-    
-
+  currentTank++;
+  if(currentTank >= tankCount)
+  {
+    currentTank = 0;
+  }
 }
 
 
@@ -349,10 +354,11 @@ function createCanvas() {
   createjs.Ticker.setFPS(15);
 
   socket.on('create', createTank);
-  socket.on('destroy', destroy);
+  socket.on('destroy', destroyTank);
   socket.on('control', control);
   socket.on('move', move);
   socket.on('fire', fire);
+  socket.on('hit', hit);
 }
 
 createCanvas();
